@@ -1,6 +1,7 @@
 package download
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -41,6 +42,13 @@ type downloads struct {
 
 var downloadsList map[string]*downloads
 
+func (d *downloads) Write(p []byte) (int, error) {
+	n := len(p)
+	d.byteDownload += int64(n)
+	fmt.Println(d.byteDownload)
+	return n, nil
+}
+
 // Download ownloads files from url to path
 func Download(urlStr string, path string) {
 	if downloadsList == nil {
@@ -53,15 +61,19 @@ func Download(urlStr string, path string) {
 		status:   queue,
 	}
 	downloadsList[urlStr] = newDownload
-	newDownload.download()
+	err := newDownload.download()
+	if err != nil {
+		log.Println(err)
+	}
 
 }
 
-func (d *downloads) download() {
+func (d *downloads) download() error {
 	d.status = inprogress
 	resp, err := http.Get(d.url)
 	if err != nil {
 		log.Println(err)
+		return err
 	}
 	defer resp.Body.Close()
 
@@ -70,23 +82,29 @@ func (d *downloads) download() {
 	f, err := os.Create(fullTempPath)
 	if err != nil {
 		log.Println(err)
+		return err
 	}
 	defer f.Close()
 
-	d.byteDownload, err = io.Copy(f, resp.Body)
+	d.byteDownload, err = io.Copy(f, io.TeeReader(resp.Body, d))
 	if err != nil {
 		log.Println(err)
+		return err
 	}
 
 	err = f.Close()
 	if err != nil {
 		log.Println(err)
+		return err
 	}
 
 	if err := os.Rename(fullTempPath, fullPath); err != nil {
 		log.Println(err)
+		return err
 	}
 	d.status = complete
+
+	return nil
 }
 
 func getName(url string) string {

@@ -2,15 +2,13 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"log"
 	"net"
 	"strings"
 	"time"
 
+	dw "remotecmds/download"
 	"remotecmds/extconnection"
-
-	"github.com/shirou/gopsutil/cpu"
 )
 
 // Server struct for server
@@ -101,27 +99,39 @@ func (srv Server) handle(conn net.Conn) error {
 			}
 			break
 		}
-		w.WriteString(strings.ToUpper(scanr.Text()) + "\n")
-		w.Flush()
+		log.Println(scanr.Text())
+		commParams := strings.Split(scanr.Text(), " ")
+		switch {
+		case commParams[0] == "download":
+			if len(commParams) < 3 {
+				w.WriteString("not enougth arguments\n")
+				w.Flush()
+				break
+			}
+			dw.Download(commParams[1], commParams[2])
+		case commParams[0] == "dwnldlist":
+			for _, s := range dw.GetDownloadList() {
+				w.WriteString(s)
+			}
+			w.WriteString("\n")
+			w.Flush()
+		default:
+			w.WriteString("unknown command\n")
+			w.Flush()
+		}
+
 	}
 	return nil
 }
 
 func main() {
-	// server := &Server{
-	// 	Addr:        ":8080",
-	// 	IdleTimeout: 20 * time.Second,
-	// 	MaxBuffer:   64,
-	// 	MaxRead:     1024,
-	// }
-	// server.ListenAndServe()
-
-	for {
-		usage, err := cpu.Percent(0, false)
-		if err != nil {
-			log.Panic(err)
-		}
-		fmt.Println(usage)
-		time.Sleep(1 * time.Second)
+	server := &Server{
+		Addr:        ":8080",
+		IdleTimeout: 20 * time.Second,
+		MaxBuffer:   64,
+		MaxRead:     1024,
 	}
+	server.ListenAndServe()
+
+	// download.Download("https://golang.org/lib/godoc/images/footer-gopher.jpg", "./")
 }
