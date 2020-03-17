@@ -14,6 +14,7 @@ type Conn struct {
 	MaxBuffer   int64
 	MaxRead     int
 	CurrRead    int
+	UserName    string
 }
 
 func (c *Conn) Write(p []byte) (int, error) {
@@ -37,4 +38,13 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 func (c *Conn) updateDeadline() {
 	idleTimeout := time.Now().Add(c.IdleTimeout)
 	c.Conn.SetDeadline(idleTimeout)
+}
+
+// Loggin fill username
+func (c *Conn) Loggin(name string) string {
+	if c.UserName != "" && c.UserName != " " {
+		return "name already set: " + c.UserName
+	}
+	c.UserName = name
+	return "name set to: " + c.UserName
 }
