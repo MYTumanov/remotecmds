@@ -1,7 +1,6 @@
 package download
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -22,14 +21,16 @@ const (
 	queue dStatus = iota
 	inprogress
 	complete
-	err
+	dErr
+	stop
 )
 
 var dStatusToStr = map[dStatus]string{
 	queue:      "queue",
 	inprogress: "inprogress",
 	complete:   "complete",
-	err:        "err",
+	dErr:       "err",
+	stop:       "stop",
 }
 
 type downloads struct {
@@ -38,15 +39,22 @@ type downloads struct {
 	url          string
 	status       dStatus
 	byteDownload int64
+	stopLoad     chan bool
 }
 
 var downloadsList map[string]*downloads
 
 func (d *downloads) Write(p []byte) (int, error) {
 	n := len(p)
-	d.byteDownload += int64(n)
-	fmt.Println(d.byteDownload)
-	return n, nil
+	select {
+	case <-d.stopLoad:
+		log.Println("Stop load signal")
+		return n, NewErrStopDownloadSignal("Stop load signal")
+	default:
+		d.byteDownload += int64(n)
+		log.Println(d.byteDownload)
+		return n, nil
+	}
 }
 
 // Download ownloads files from url to path
@@ -59,11 +67,13 @@ func Download(urlStr string, path string) {
 		filePath: path,
 		url:      urlStr,
 		status:   queue,
+		stopLoad: make(chan bool),
 	}
 	downloadsList[urlStr] = newDownload
 	err := newDownload.download()
 	if err != nil {
 		log.Println(err)
+		newDownload.status = dErr
 	}
 
 }
@@ -89,7 +99,17 @@ func (d *downloads) download() error {
 	d.byteDownload, err = io.Copy(f, io.TeeReader(resp.Body, d))
 	if err != nil {
 		log.Println(err)
-		return err
+		switch err.(type) {
+		case *ErrStopDownloadSignal:
+			err = f.Sync()
+			if err != nil {
+				log.Println(err)
+			}
+			d.status = stop
+			return err
+		default:
+			return err
+		}
 	}
 
 	err = f.Close()
@@ -124,3 +144,6 @@ func GetDownloadList() []string {
 	}
 	return list
 }
+
+// StopDownload stop download by id
+func StopDownload() {}
